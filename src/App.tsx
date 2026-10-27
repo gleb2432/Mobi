@@ -114,6 +114,11 @@ export default function App() {
     } catch (e) {
       console.warn('Storage warning:', e);
     }
+
+    // If admin logged in specifically to view reports, open reports modal
+    if (adminModalActionTitle?.toLowerCase().includes('отчет')) {
+      setIsReportsModalOpen(true);
+    }
   };
 
   const handleLogoutAdmin = async () => {
@@ -133,6 +138,16 @@ export default function App() {
     setAdminModalActionTitle(actionTitle);
     setIsAdminModalOpen(true);
     return false;
+  };
+
+  // Secure Reports Opener (Admin Only)
+  const handleOpenReports = () => {
+    if (!isAdmin) {
+      setAdminModalActionTitle('Доступ к отчетам (только для администратора)');
+      setIsAdminModalOpen(true);
+      return;
+    }
+    setIsReportsModalOpen(true);
   };
 
   // Real-time Firebase Sync Setup
@@ -647,7 +662,7 @@ export default function App() {
           setIsAdminModalOpen(true);
         }}
         onLogoutAdmin={handleLogoutAdmin}
-        onOpenReports={() => setIsReportsModalOpen(true)}
+        onOpenReports={handleOpenReports}
       />
 
       {/* Main Container */}
@@ -672,7 +687,7 @@ export default function App() {
               setPresetCellId(cellId);
               setActiveTab('unload');
             }}
-            onOpenReports={() => setIsReportsModalOpen(true)}
+            onOpenReports={handleOpenReports}
           />
         )}
 
@@ -699,7 +714,7 @@ export default function App() {
               setAdminModalActionTitle(title || 'Разблокировка ячейки');
               setIsAdminModalOpen(true);
             }}
-            onOpenReports={() => setIsReportsModalOpen(true)}
+            onOpenReports={handleOpenReports}
           />
         )}
 
@@ -725,7 +740,7 @@ export default function App() {
             adminEmail={adminEmail}
             onAdminLoginSuccess={handleAdminLoginSuccess}
             onLogoutAdmin={handleLogoutAdmin}
-            onOpenReports={() => setIsReportsModalOpen(true)}
+            onOpenReports={handleOpenReports}
           />
         )}
       </main>
@@ -745,13 +760,18 @@ export default function App() {
         actionTitle={adminModalActionTitle}
       />
 
-      {/* Warehouse Reports & Export Modal (Excel / PDF) */}
+      {/* Warehouse Reports & Export Modal (Excel / PDF) — Admin Only */}
       <ReportsModal
         isOpen={isReportsModalOpen}
         onClose={() => setIsReportsModalOpen(false)}
         cells={cells}
         catalog={catalog}
         logs={logs}
+        isAdmin={isAdmin}
+        onRequestAdminAuth={() => {
+          setAdminModalActionTitle('Доступ к отчетам (только для администратора)');
+          setIsAdminModalOpen(true);
+        }}
       />
     </div>
   );

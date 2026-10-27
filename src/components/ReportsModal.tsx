@@ -10,7 +10,9 @@ import {
   Calendar,
   Layers,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Lock,
+  ShieldCheck
 } from 'lucide-react';
 import {
   TerminalCell,
@@ -35,6 +37,8 @@ interface ReportsModalProps {
   cells: TerminalCell[];
   catalog: CatalogBottle[];
   logs: WarehouseLog[];
+  isAdmin?: boolean;
+  onRequestAdminAuth?: () => void;
 }
 
 export const ReportsModal: React.FC<ReportsModalProps> = ({
@@ -42,7 +46,9 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
   onClose,
   cells,
   catalog,
-  logs
+  logs,
+  isAdmin = false,
+  onRequestAdminAuth
 }) => {
   const [selectedLocation, setSelectedLocation] = useState<'all' | TerminalLocation>('all');
   const [selectedBottleId, setSelectedBottleId] = useState<'all' | string>('all');
@@ -98,6 +104,43 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
 
   if (!isOpen) return null;
 
+  if (!isAdmin) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+        <div className="bg-slate-900 border border-amber-800/80 w-full max-w-md rounded-2xl p-6 shadow-2xl text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 mx-auto">
+            <Lock className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white">Доступ только для администратора</h3>
+            <p className="text-xs text-slate-300 mt-1">
+              Формирование и экспорт складских отчетов (Excel и PDF) разрешены только администраторам терминала.
+            </p>
+          </div>
+          <div className="pt-2 flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onRequestAdminAuth?.();
+              }}
+              className="flex-1 min-h-[42px] bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40"
+            >
+              Ввести пароль администратора
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 min-h-[42px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs rounded-xl"
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const currentDateStr = new Date().toLocaleString('ru-RU');
 
   return (
@@ -113,7 +156,10 @@ export const ReportsModal: React.FC<ReportsModalProps> = ({
               </div>
               <div>
                 <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                  Отчеты и складские ведомости
+                  <span>Отчеты и складские ведомости</span>
+                  <span className="text-[10px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                    Только для администратора
+                  </span>
                 </h2>
                 <p className="text-xs text-slate-400">
                   Выгрузка остатков стеклотары, партий FIFO и аналитики в Excel и PDF

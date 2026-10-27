@@ -335,10 +335,18 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
             <button
               type="button"
               onClick={onOpenReports}
-              className="px-3 py-1.5 bg-slate-900/90 hover:bg-emerald-950 text-emerald-300 hover:text-white border border-emerald-700/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm shrink-0"
-              title="Открыть ведомость остатков и партий (Excel / PDF)"
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm shrink-0 border ${
+                isAdmin
+                  ? 'bg-slate-900/90 hover:bg-emerald-950 text-emerald-300 hover:text-white border-emerald-700/60'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 border-slate-800'
+              }`}
+              title={isAdmin ? "Открыть ведомость остатков и партий (Excel / PDF)" : "Отчеты доступны только для администратора (требуется пароль)"}
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              {isAdmin ? (
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+              )}
               <span>Ведомость остатков</span>
             </button>
           )}

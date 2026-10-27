@@ -80,14 +80,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Reports Button */}
+          {/* Reports Button (Admin Protected) */}
           {onOpenReports && (
             <button
               onClick={onOpenReports}
-              title="Складские отчеты и ведомости (Excel / PDF)"
-              className="flex items-center gap-1.5 bg-emerald-950/70 hover:bg-emerald-900/80 active:scale-95 text-emerald-300 hover:text-white px-2.5 py-1.5 rounded-xl border border-emerald-800/80 text-xs font-semibold transition-all shadow-sm"
+              title={isAdmin ? "Складские отчеты и ведомости (Excel / PDF)" : "Отчеты доступны только для администратора (требуется пароль)"}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all shadow-sm ${
+                isAdmin
+                  ? 'bg-emerald-950/70 hover:bg-emerald-900/80 active:scale-95 text-emerald-300 hover:text-white border-emerald-800/80'
+                  : 'bg-slate-800/60 hover:bg-slate-800 active:scale-95 text-slate-400 hover:text-slate-200 border-slate-700/60'
+              }`}
             >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              {isAdmin ? (
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Lock className="w-3.5 h-3.5 text-amber-400/80" />
+              )}
               <span className="hidden sm:inline">Отчеты (Excel/PDF)</span>
               <span className="sm:hidden">Отчеты</span>
             </button>

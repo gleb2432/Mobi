@@ -215,10 +215,18 @@ export const TerminalMap: React.FC<TerminalMapProps> = ({
                 <button
                   type="button"
                   onClick={onOpenReports}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-950 hover:bg-emerald-950/80 text-emerald-300 hover:text-white border border-slate-800 hover:border-emerald-700/60 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm shrink-0"
-                  title="Сводная ведомость и отчет по остаткам (Excel / PDF)"
+                  className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm shrink-0 ${
+                    isAdmin
+                      ? 'bg-slate-950 hover:bg-emerald-950/80 text-emerald-300 hover:text-white border-slate-800 hover:border-emerald-700/60'
+                      : 'bg-slate-950 text-slate-400 hover:text-slate-200 border-slate-800'
+                  }`}
+                  title={isAdmin ? "Сводная ведомость и отчет по остаткам (Excel / PDF)" : "Отчеты доступны только для администратора (требуется пароль)"}
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  {isAdmin ? (
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  ) : (
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  )}
                   <span className="hidden sm:inline">Отчет (Excel / PDF)</span>
                   <span className="sm:hidden">Отчет</span>
                 </button>
