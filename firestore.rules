@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Bottle catalog
+    match /catalog_bottles/{bottleId} {
+      allow read, write: if true;
+    }
+
+    // Terminal cells layout state (A1..L7)
+    match /terminal_cells/{cellId} {
+      allow read, write: if true;
+    }
+
+    // Unloading batch records
+    match /unloading_batches/{batchId} {
+      allow read, write: if true;
+    }
+
+    // Activity logs for FIFO warehouse transfers
+    match /warehouse_logs/{logId} {
+      allow read, write: if true;
+    }
+
+    // Health check test path
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

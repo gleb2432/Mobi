@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "CatalogBottle": {
+      "title": "CatalogBottle",
+      "description": "Definition of glass bottle type/variety",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier" },
+        "name": { "type": "string", "description": "Bottle brand or model name (e.g., Бад Эмеральд)" },
+        "supplier": { "type": "string", "description": "Glass manufacturer or supplier" },
+        "color": { "type": "string", "description": "Glass color: emerald, green, amber, clear" },
+        "volume": { "type": "string", "description": "Volume or bottle spec e.g. 0.45L" },
+        "createdAt": { "type": "string", "description": "ISO Timestamp or server time" },
+        "updatedAt": { "type": "string", "description": "ISO Timestamp" }
+      },
+      "required": ["id", "name", "supplier", "color"]
+    },
+    "TerminalCell": {
+      "title": "TerminalCell",
+      "description": "Occupancy state of a single cell/spot (A1..L7)",
+      "type": "object",
+      "properties": {
+        "cellId": { "type": "string", "description": "Cell code e.g. A1, L7" },
+        "row": { "type": "string", "description": "Row letter A..L" },
+        "position": { "type": "number", "description": "Position 1..7 within row" },
+        "status": { "type": "string", "description": "empty or occupied" },
+        "bottleId": { "type": "string", "description": "Bottle ID if occupied" },
+        "bottleName": { "type": "string", "description": "Bottle name for quick display" },
+        "bottleColor": { "type": "string", "description": "Bottle color for visual tag" },
+        "supplier": { "type": "string", "description": "Supplier name" },
+        "mfgDate": { "type": "string", "description": "Production date YYYY-MM-DD" },
+        "batchId": { "type": "string", "description": "Associated truck batch ID" },
+        "truckPlate": { "type": "string", "description": "Delivery truck license plate or ID" },
+        "palletCount": { "type": "number", "description": "Number of pallets in cell" },
+        "isBlocked": { "type": "boolean", "description": "Whether the cell is blocked from warehouse intake" },
+        "blockReason": { "type": "string", "description": "Reason why the cell was blocked (e.g. defect, quarantine)" },
+        "blockedAt": { "type": "string", "description": "Timestamp when the cell was blocked" },
+        "blockedBy": { "type": "string", "description": "Name or identifier of operator who blocked the cell" },
+        "updatedAt": { "type": "string", "description": "Last modified ISO string" }
+      },
+      "required": ["cellId", "row", "position", "status"]
+    },
+    "UnloadingBatch": {
+      "title": "UnloadingBatch",
+      "description": "Truck unloading delivery record",
+      "type": "object",
+      "properties": {
+        "batchId": { "type": "string", "description": "Unique batch ID" },
+        "bottleId": { "type": "string", "description": "Bottle ID" },
+        "bottleName": { "type": "string", "description": "Bottle name" },
+        "supplier": { "type": "string", "description": "Supplier name" },
+        "mfgDates": { "type": "array", "description": "Array of 1 or 2 production dates YYYY-MM-DD" },
+        "row": { "type": "string", "description": "Assigned row A..L" },
+        "occupiedCellIds": { "type": "array", "description": "Cells used e.g. ['A1', 'A2']" },
+        "quantityPallets": { "type": "number", "description": "Total pallets delivered" },
+        "truckPlate": { "type": "string", "description": "Vehicle reg number" },
+        "notes": { "type": "string", "description": "Driver or operator notes" },
+        "createdAt": { "type": "string", "description": "Timestamp" }
+      },
+      "required": ["batchId", "bottleId", "row", "occupiedCellIds"]
+    },
+    "WarehouseLog": {
+      "title": "WarehouseLog",
+      "description": "Audit log for unloadings and warehouse FIFO intakes",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string", "description": "Unique log ID" },
+        "actionType": { "type": "string", "description": "unloaded_to_terminal or transferred_to_warehouse" },
+        "bottleName": { "type": "string", "description": "Bottle name" },
+        "mfgDate": { "type": "string", "description": "Production date(s)" },
+        "cellsInvolved": { "type": "array", "description": "List of cell IDs" },
+        "quantityPallets": { "type": "number", "description": "Number of pallets" },
+        "operatorName": { "type": "string", "description": "User or operator" },
+        "timestamp": { "type": "string", "description": "Log timestamp" }
+      },
+      "required": ["logId", "actionType", "bottleName", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/catalog_bottles/{bottleId}": {
+      "schema": { "$ref": "#/entities/CatalogBottle" },
+      "description": "Catalog of available glass bottle varieties"
+    },
+    "/terminal_cells/{cellId}": {
+      "schema": { "$ref": "#/entities/TerminalCell" },
+      "description": "84 cell statuses (A1..L7) in the open-air terminal"
+    },
+    "/unloading_batches/{batchId}": {
+      "schema": { "$ref": "#/entities/UnloadingBatch" },
+      "description": "Truck unloading batch history"
+    },
+    "/warehouse_logs/{logId}": {
+      "schema": { "$ref": "#/entities/WarehouseLog" },
+      "description": "Activity history log"
+    }
+  }
+}

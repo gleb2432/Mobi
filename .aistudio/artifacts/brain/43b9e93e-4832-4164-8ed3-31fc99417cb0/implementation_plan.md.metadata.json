@@ -1,0 +1,6 @@
+{
+  "summary":  "Removed Google authentication completely and implemented admin authentication exclusively via password 'admin2026.ru'. Updated AdminAuthModal, AdminPanel, Navbar, and Firebase helpers.",
+  "updatedAt":  "2026-10-25T18:11:42.964133346Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

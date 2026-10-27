@@ -1,0 +1,6 @@
+{
+  "name": "Мобильный Терминал Стеклотары (FIFO)",
+  "description": "Управление выгрузкой машин на эстакаде терминала (12 рядов × 7 ячеек) и завоз на склад по принципу FIFO",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
