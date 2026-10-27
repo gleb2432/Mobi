@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
+import firebaseConfig from '@/firebase-applet-config.json';
 import {
   getFirestore,
   initializeFirestore,
@@ -18,8 +19,7 @@ import {
   getAuth,
   signOut
 } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
-import { CatalogBottle, TerminalCell, WarehouseLog, UnloadingBatch, CellBatchDetail, CELLS_PER_ROW, GlassColor } from '../types/terminal';
+import { CatalogBottle, TerminalCell, WarehouseLog, UnloadingBatch, CellBatchDetail, CELLS_PER_ROW, GlassColor, TerminalLocation, LOCATION_LABELS, DEFAULT_PALLET_CAPACITY } from '../types/terminal';
 import { INITIAL_BOTTLES, generateInitialCells, INITIAL_LOGS } from '../data/initialData';
 
 // Set Firestore log level to error to avoid noisy transport warnings in iframe sandbox
@@ -173,7 +173,14 @@ export function subscribeToTerminalCells(
           .catch(() => onSuccess([]));
         return;
       }
-      const cellsList: TerminalCell[] = snapshot.docs.map((d) => d.data() as TerminalCell);
+      const cellsList: TerminalCell[] = snapshot.docs.map((d) => {
+        const data = d.data() as TerminalCell;
+        return {
+          ...data,
+          location: data.location || 'эстакада',
+          palletCapacity: typeof data.palletCapacity === 'number' && data.palletCapacity > 0 ? data.palletCapacity : DEFAULT_PALLET_CAPACITY
+        };
+      });
       const sorted = cellsList.sort((a, b) => a.cellId.localeCompare(b.cellId));
       onSuccess(sorted);
     },
@@ -296,7 +303,8 @@ export async function unloadTruckToFirestore(
       const cellData: Partial<TerminalCell> = {
         cellId: assignment.cellId,
         row: batchData.row,
-        position: parseInt(assignment.cellId.replace(/^[A-L]/, ''), 10) || 1,
+        location: batchData.location,
+        position: parseInt(assignment.cellId.replace(/^[A-ZА-Я]+/i, ''), 10) || 1,
         status: 'occupied',
         bottleId: batchData.bottleId,
         bottleName: batchData.bottleName,
@@ -460,14 +468,17 @@ export async function transferCellsToWarehouseFirestore(
       return false;
     }
 
-    validCellIds.forEach((cellId) => {
+    for (const cellId of validCellIds) {
       const cellRef = doc(db, 'terminal_cells', cellId);
-      const row = cellId.charAt(0);
-      const position = parseInt(cellId.slice(1), 10);
+      const cellSnap = await getDoc(cellRef);
+      const existingData = cellSnap.data() as TerminalCell;
+      
       const emptyCellData: TerminalCell = {
         cellId,
-        row,
-        position,
+        row: cellId.charAt(0),
+        position: parseInt(cellId.replace(/^[A-ZА-Я]+/i, ''), 10) || 1,
+        location: existingData?.location || 'эстакада',
+        palletCapacity: existingData?.palletCapacity || DEFAULT_PALLET_CAPACITY,
         status: 'empty',
         isBlocked: false,
         blockReason: '',
@@ -476,7 +487,7 @@ export async function transferCellsToWarehouseFirestore(
         updatedAt: new Date().toISOString()
       };
       batch.set(cellRef, emptyCellData);
-    });
+    }
 
     const logId = `log_${Date.now()}`;
     const logRef = doc(db, 'warehouse_logs', logId);
@@ -574,7 +585,9 @@ export async function transferPalletsPartialFirestore(
         const emptyCellData: TerminalCell = {
           cellId: p.cellId,
           row: p.cellId.charAt(0),
-          position: parseInt(p.cellId.slice(1), 10) || 1,
+          position: parseInt(p.cellId.replace(/^[A-ZА-Я]+/i, ''), 10) || 1,
+          location: cellData.location || 'эстакада',
+          palletCapacity: cellData.palletCapacity || DEFAULT_PALLET_CAPACITY,
           status: 'empty',
           updatedAt: new Date().toISOString()
         };
@@ -663,10 +676,16 @@ export async function deleteCatalogBottleFirestore(bottleId: string): Promise<bo
 }
 
 // Add dynamic terminal row
-export async function addTerminalRowFirestore(rowLetter: string): Promise<boolean> {
+export async function addTerminalRowFirestore(
+  rowLetter: string,
+  location: TerminalLocation = 'эстакада',
+  capacity: number = DEFAULT_PALLET_CAPACITY
+): Promise<boolean> {
   try {
     const batch = writeBatch(db);
     const cleanRow = rowLetter.trim().toUpperCase();
+    const finalCapacity = Math.max(1, capacity || DEFAULT_PALLET_CAPACITY);
+
     for (let pos = 1; pos <= CELLS_PER_ROW; pos++) {
       const cellId = `${cleanRow}${pos}`;
       const cellRef = doc(db, 'terminal_cells', cellId);
@@ -674,6 +693,8 @@ export async function addTerminalRowFirestore(rowLetter: string): Promise<boolea
         cellId,
         row: cleanRow,
         position: pos,
+        location,
+        palletCapacity: finalCapacity,
         status: 'empty',
         updatedAt: new Date().toISOString()
       };
@@ -685,12 +706,12 @@ export async function addTerminalRowFirestore(rowLetter: string): Promise<boolea
     const logData: WarehouseLog = {
       id: logId,
       actionType: 'unloaded_to_terminal',
-      bottleName: `Добавлен Ряд ${cleanRow}`,
+      bottleName: `Добавлен Ряд ${cleanRow} (${LOCATION_LABELS[location]})`,
       mfgDate: new Date().toISOString().split('T')[0],
       cellsInvolved: Array.from({ length: CELLS_PER_ROW }, (_, i) => `${cleanRow}${i + 1}`),
       operatorName: 'Администратор',
       timestamp: new Date().toISOString(),
-      details: `В структуру терминала добавлен новый Ряд ${cleanRow} (7 ячеек)`
+      details: `В структуру терминала (${LOCATION_LABELS[location]}) добавлен новый Ряд ${cleanRow} (7 ячеек)`
     };
     batch.set(logRef, logData);
 
@@ -739,18 +760,23 @@ export async function deleteTerminalRowFirestore(rowLetter: string, cellIdsInRow
 export async function addTerminalCellFirestore(
   cellId: string,
   rowLetter: string,
-  position?: number
+  location: TerminalLocation = 'эстакада',
+  position?: number,
+  capacity: number = DEFAULT_PALLET_CAPACITY
 ): Promise<boolean> {
   try {
     const cleanCellId = cellId.trim().toUpperCase();
     const cleanRow = rowLetter.trim().toUpperCase();
     const pos = position || parseInt(cleanCellId.replace(/^[A-ZА-Я]+/i, ''), 10) || 1;
+    const finalCapacity = Math.max(1, capacity || DEFAULT_PALLET_CAPACITY);
 
     const cellRef = doc(db, 'terminal_cells', cleanCellId);
     const newCell: TerminalCell = {
       cellId: cleanCellId,
       row: cleanRow,
       position: pos,
+      location,
+      palletCapacity: finalCapacity,
       status: 'empty',
       updatedAt: new Date().toISOString()
     };
@@ -768,7 +794,7 @@ export async function addTerminalCellFirestore(
       cellsInvolved: [cleanCellId],
       operatorName: 'Администратор',
       timestamp: new Date().toISOString(),
-      details: `Добавлена новая свободная ячейка ${cleanCellId} в Ряд ${cleanRow}`
+      details: `Добавлена новая свободная ячейка ${cleanCellId} в Ряд ${cleanRow} (${LOCATION_LABELS[location]})`
     };
     batch.set(logRef, logData);
 
@@ -807,6 +833,87 @@ export async function deleteTerminalCellFirestore(cellId: string): Promise<boole
     return true;
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `terminal_cells/${cellId}`);
+    return false;
+  }
+}
+
+// Update capacity of an individual cell (Admin only)
+export async function updateCellCapacityFirestore(
+  cellId: string,
+  newCapacity: number,
+  adminName: string = 'Администратор'
+): Promise<boolean> {
+  try {
+    const cleanId = cellId.trim().toUpperCase();
+    const finalCapacity = Math.max(1, Math.round(newCapacity));
+    const cellRef = doc(db, 'terminal_cells', cleanId);
+    const nowIso = new Date().toISOString();
+
+    const cellSnap = await getDoc(cellRef);
+    if (!cellSnap.exists()) return false;
+    const existing = cellSnap.data() as TerminalCell;
+
+    const batch = writeBatch(db);
+    batch.set(cellRef, { palletCapacity: finalCapacity, updatedAt: nowIso }, { merge: true });
+
+    const logId = `log_${Date.now()}`;
+    const logRef = doc(db, 'warehouse_logs', logId);
+    const logData: WarehouseLog = {
+      id: logId,
+      actionType: 'transferred_to_warehouse',
+      bottleName: `Изменение вместимости ${cleanId}: ${existing.palletCapacity || DEFAULT_PALLET_CAPACITY} → ${finalCapacity} палл.`,
+      mfgDate: nowIso.split('T')[0],
+      cellsInvolved: [cleanId],
+      operatorName: adminName,
+      timestamp: nowIso,
+      details: `Администратор изменил максимальную вместимость ячейки ${cleanId} на ${finalCapacity} паллет.`
+    };
+    batch.set(logRef, logData);
+
+    await batch.commit();
+    return true;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `terminal_cells/${cellId}`);
+    return false;
+  }
+}
+
+// Update capacity of all cells in a row (Admin only)
+export async function updateRowCapacityFirestore(
+  rowLetter: string,
+  cellIds: string[],
+  newCapacity: number,
+  adminName: string = 'Администратор'
+): Promise<boolean> {
+  try {
+    const cleanRow = rowLetter.trim().toUpperCase();
+    const finalCapacity = Math.max(1, Math.round(newCapacity));
+    const nowIso = new Date().toISOString();
+    const batch = writeBatch(db);
+
+    cellIds.forEach((cId) => {
+      const cellRef = doc(db, 'terminal_cells', cId);
+      batch.set(cellRef, { palletCapacity: finalCapacity, updatedAt: nowIso }, { merge: true });
+    });
+
+    const logId = `log_${Date.now()}`;
+    const logRef = doc(db, 'warehouse_logs', logId);
+    const logData: WarehouseLog = {
+      id: logId,
+      actionType: 'transferred_to_warehouse',
+      bottleName: `Вместимость Ряда ${cleanRow}: ${finalCapacity} палл./ячейка`,
+      mfgDate: nowIso.split('T')[0],
+      cellsInvolved: cellIds,
+      operatorName: adminName,
+      timestamp: nowIso,
+      details: `Администратор изменил вместимость всех ${cellIds.length} ячеек Ряда ${cleanRow} на ${finalCapacity} паллет.`
+    };
+    batch.set(logRef, logData);
+
+    await batch.commit();
+    return true;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `terminal_cells/row_${rowLetter}`);
     return false;
   }
 }

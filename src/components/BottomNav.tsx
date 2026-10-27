@@ -33,7 +33,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     },
     {
       id: 'admin' as const,
-      label: 'Админка',
+      label: 'Админ панель',
       icon: Settings,
       badge: null
     }
@@ -49,7 +49,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex flex-col items-center justify-center min-h-[48px] py-1 px-2 rounded-xl transition-all relative ${
+              className={`flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all relative ${
                 isActive
                   ? 'text-emerald-400 font-bold'
                   : 'text-slate-400 hover:text-slate-200 active:scale-95'
@@ -63,7 +63,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   </span>
                 )}
               </div>
-              <span className="text-[11px] mt-1 tracking-tight truncate max-w-full">
+              <span className="text-[10px] sm:text-[11px] mt-1 tracking-tight text-center whitespace-nowrap">
                 {item.label}
               </span>
               {isActive && (

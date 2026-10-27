@@ -1,6 +1,6 @@
 {
-  "summary":  "Removed Google authentication completely and implemented admin authentication exclusively via password 'admin2026.ru'. Updated AdminAuthModal, AdminPanel, Navbar, and Firebase helpers.",
-  "updatedAt":  "2026-10-25T18:11:42.964133346Z",
+  "summary":  "План реализации модуля генерации и экспорта складских отчетов в Excel (.xlsx/CSV) и печатную форму/PDF по фактическим остаткам стеклотары, партиям FIFO и ячейкам терминала.",
+  "updatedAt":  "2026-10-27T11:43:24.697239528Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

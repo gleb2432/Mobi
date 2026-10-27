@@ -15,6 +15,14 @@ export function getGlassColorLabel(color?: GlassColor): string {
   return '—';
 }
 
+export type TerminalLocation = 'эстакада' | 'плиты' | 'абк';
+
+export const LOCATION_LABELS: Record<TerminalLocation, string> = {
+  'эстакада': 'Эстакада',
+  'плиты': 'Плиты',
+  'абк': 'АБК'
+};
+
 export interface CatalogBottle {
   id: string;
   name: string;
@@ -38,7 +46,9 @@ export interface TerminalCell {
   cellId: string;        // e.g. "A1", "B7", "L3"
   row: string;           // e.g. "A", "B", ... "L"
   position: number;      // 1..7
+  location: TerminalLocation; // 'эстакада' | 'плиты' | 'абк'
   status: 'empty' | 'occupied';
+  palletCapacity?: number; // Максимальная вместимость ячейки в паллетах (по умолчанию 26)
   bottleId?: string;
   bottleName?: string;
   bottleColor?: GlassColor;
@@ -64,6 +74,7 @@ export interface UnloadingBatch {
   bottleColor: GlassColor;
   bottlesPerPallet?: number; // Количество бутылок в 1 палете
   mfgDates: string[];    // Array of production dates (YYYY-MM-DD)
+  location: TerminalLocation;
   row: string;           // Target row e.g. "A"
   occupiedCellIds: string[]; // Cell IDs e.g. ["A1", "A2"]
   quantityPallets: number;

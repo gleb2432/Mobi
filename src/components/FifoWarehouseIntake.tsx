@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CatalogBottle, TerminalCell, FifoGroup, GlassColor, CellBatchDetail, getGlassColorLabel } from '../types/terminal';
+import { CatalogBottle, TerminalCell, FifoGroup, GlassColor, CellBatchDetail, getGlassColorLabel, TerminalLocation, LOCATION_LABELS } from '../types/terminal';
 import { PartialCellPickup } from '../lib/firebase';
-import { PackageCheck, Clock, CheckCircle2, ArrowDownAZ, Layers, Sparkles, Building2, MapPin, X, Hash, ChevronRight, Lock, ShieldAlert, Package } from 'lucide-react';
+import { PackageCheck, Clock, CheckCircle2, ArrowDownAZ, Layers, Sparkles, Building2, MapPin, X, Hash, ChevronRight, Lock, ShieldAlert, Package, FileSpreadsheet } from 'lucide-react';
 
 interface FifoWarehouseIntakeProps {
   catalog: CatalogBottle[];
@@ -11,6 +11,7 @@ interface FifoWarehouseIntakeProps {
   onUnblockCell?: (cellId: string) => Promise<boolean>;
   isAdmin?: boolean;
   onRequestAdminAuth?: (actionTitle?: string) => void;
+  onOpenReports?: () => void;
 }
 
 export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
@@ -20,7 +21,8 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
   onTransferPartialCells,
   onUnblockCell,
   isAdmin = false,
-  onRequestAdminAuth
+  onRequestAdminAuth,
+  onOpenReports
 }) => {
   const [selectedBottleFilter, setSelectedBottleFilter] = useState<string>('all');
   const [confirmGroup, setConfirmGroup] = useState<FifoGroup | null>(null);
@@ -147,7 +149,8 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
 
     const supplier = cell.supplier || 'Не указан';
     const color = cell.bottleColor || 'clear';
-    const key = `${bottleName}_${supplier}_${color}_${cell.row}`;
+    // Group by bottle identity + manufacture date to keep FIFO batches distinct
+    const key = `${bottleName}_${supplier}_${color}_${cell.mfgDate}`;
 
     if (!fifoGroupsMap.has(key)) {
       const cellDates = cellBatches.map((b) => b.mfgDate);
@@ -327,6 +330,18 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
               </p>
             </div>
           </div>
+
+          {onOpenReports && (
+            <button
+              type="button"
+              onClick={onOpenReports}
+              className="px-3 py-1.5 bg-slate-900/90 hover:bg-emerald-950 text-emerald-300 hover:text-white border border-emerald-700/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm shrink-0"
+              title="Открыть ведомость остатков и партий (Excel / PDF)"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Ведомость остатков</span>
+            </button>
+          )}
         </div>
 
         {/* Filter Dropdown */}
@@ -479,7 +494,7 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
                         <div className="text-xs font-bold text-emerald-400 flex items-center justify-between">
                           <span className="flex items-center gap-1.5">
                             <Layers className="w-4 h-4 text-emerald-400" />
-                            Состав партий на эстакаде ({group.allBatches?.length || 1} шт.):
+                            Состав партий на терминале ({group.allBatches?.length || 1} шт.):
                           </span>
                           <span className="font-mono text-white bg-slate-800 px-2 py-0.5 rounded text-[11px]">
                             Всего: {group.totalPallets} паллет (~{groupTotalBottles.toLocaleString('ru-RU')} бут.)
@@ -520,10 +535,13 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
                   <div>
                     <div className="text-xs text-slate-400 font-medium flex items-center gap-1 mb-1">
                       <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-                      Местоположение на уличной эстакаде:
+                      Местоположение на терминале:
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono font-extrabold text-white text-base bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                        {LOCATION_LABELS[group.cells[0].location || 'эстакада']}
+                      </span>
+                      <span className="font-mono font-bold text-white text-sm bg-slate-850 px-2 py-0.5 rounded border border-slate-800">
                         Ряд {group.cells[0].row}
                       </span>
                       <span className="font-mono font-bold text-emerald-300 text-sm">
@@ -599,9 +617,11 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
                     {modalBPerPallet.toLocaleString('ru-RU')} бут./паллет
                   </span>
                   <div className="text-right">
-                    <div className="text-slate-400 text-[11px]">Ряд:</div>
-                    <div className="font-mono font-extrabold text-emerald-400 text-sm">
-                      {confirmGroup.cells[0].row}
+                    <div className="text-slate-400 text-[11px]">Место:</div>
+                    <div className="font-mono font-extrabold text-emerald-400 text-[11px] leading-tight">
+                      {LOCATION_LABELS[confirmGroup.cells[0].location || 'эстакада']}
+                      <br />
+                      Ряд {confirmGroup.cells[0].row}
                     </div>
                   </div>
                 </div>

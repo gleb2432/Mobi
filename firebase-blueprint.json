@@ -32,6 +32,7 @@
         "batchId": { "type": "string", "description": "Associated truck batch ID" },
         "truckPlate": { "type": "string", "description": "Delivery truck license plate or ID" },
         "palletCount": { "type": "number", "description": "Number of pallets in cell" },
+        "palletCapacity": { "type": "number", "description": "Maximum pallet capacity of cell (default 26)" },
         "isBlocked": { "type": "boolean", "description": "Whether the cell is blocked from warehouse intake" },
         "blockReason": { "type": "string", "description": "Reason why the cell was blocked (e.g. defect, quarantine)" },
         "blockedAt": { "type": "string", "description": "Timestamp when the cell was blocked" },

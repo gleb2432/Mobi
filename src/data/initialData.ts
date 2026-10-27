@@ -56,6 +56,7 @@ export function generateEmptyCells(): TerminalCell[] {
         cellId: `${row}${pos}`,
         row,
         position: pos,
+        location: 'эстакада',
         status: 'empty'
       });
     }

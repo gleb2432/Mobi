@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { CatalogBottle, TerminalCell, WarehouseLog, UnloadingBatch, GlassColor } from './types/terminal';
+import { CatalogBottle, TerminalCell, WarehouseLog, UnloadingBatch, GlassColor, TerminalLocation, DEFAULT_PALLET_CAPACITY } from './types/terminal';
 import { INITIAL_BOTTLES, generateInitialCells, INITIAL_LOGS } from './data/initialData';
 import {
   subscribeToTerminalCells,
@@ -18,6 +18,8 @@ import {
   deleteTerminalRowFirestore,
   addTerminalCellFirestore,
   deleteTerminalCellFirestore,
+  updateCellCapacityFirestore,
+  updateRowCapacityFirestore,
   addCatalogBottleFirestore,
   updateCatalogBottleFirestore,
   deleteCatalogBottleFirestore,
@@ -34,6 +36,7 @@ import { TruckUnloading } from './components/TruckUnloading';
 import { FifoWarehouseIntake } from './components/FifoWarehouseIntake';
 import { AdminPanel } from './components/AdminPanel';
 import { AdminAuthModal } from './components/AdminAuthModal';
+import { ReportsModal } from './components/ReportsModal';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'map' | 'unload' | 'fifo' | 'admin'>('map');
@@ -98,6 +101,7 @@ export default function App() {
   });
   const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
   const [adminModalActionTitle, setAdminModalActionTitle] = useState<string | undefined>(undefined);
+  const [isReportsModalOpen, setIsReportsModalOpen] = useState<boolean>(false);
 
   // Admin Auth Helpers
   const handleAdminLoginSuccess = (identifier?: string) => {
@@ -272,6 +276,7 @@ export default function App() {
               cellId: id,
               row: id.charAt(0),
               position: parseInt(id.slice(1), 10),
+              location: next[idx].location || 'эстакада',
               status: 'empty',
               updatedAt: new Date().toISOString()
             };
@@ -350,6 +355,7 @@ export default function App() {
                 cellId: p.cellId,
                 row: p.cellId.charAt(0),
                 position: parseInt(p.cellId.slice(1), 10) || 1,
+                location: currentCell.location || 'эстакада',
                 status: 'empty',
                 updatedAt: new Date().toISOString()
               };
@@ -400,10 +406,15 @@ export default function App() {
   };
 
   // Add Dynamic Row to Terminal (Admin Only)
-  const handleAddRow = async (rowLetter: string): Promise<boolean> => {
+  const handleAddRow = async (
+    rowLetter: string,
+    location: TerminalLocation = 'эстакада',
+    capacity: number = DEFAULT_PALLET_CAPACITY
+  ): Promise<boolean> => {
     if (!handleRequireAdmin(`Добавить Ряд ${rowLetter}`)) return false;
     const cleanRow = rowLetter.trim().toUpperCase();
-    const success = await addTerminalRowFirestore(cleanRow);
+    const finalCapacity = Math.max(1, capacity || DEFAULT_PALLET_CAPACITY);
+    const success = await addTerminalRowFirestore(cleanRow, location, finalCapacity);
     if (!isLive || !success) {
       setCells((prev) => {
         const newCells: TerminalCell[] = [];
@@ -412,6 +423,8 @@ export default function App() {
             cellId: `${cleanRow}${pos}`,
             row: cleanRow,
             position: pos,
+            location: location,
+            palletCapacity: finalCapacity,
             status: 'empty',
             updatedAt: new Date().toISOString()
           });
@@ -427,7 +440,7 @@ export default function App() {
           cellsInvolved: Array.from({ length: 7 }, (_, i) => `${cleanRow}${i + 1}`),
           operatorName: 'Администратор',
           timestamp: new Date().toISOString(),
-          details: `В структуру терминала добавлен новый Ряд ${cleanRow} (7 ячеек)`
+          details: `В структуру терминала добавлен новый Ряд ${cleanRow} (7 ячеек, вместимость: ${finalCapacity} палл.)`
         },
         ...prev
       ]);
@@ -461,13 +474,20 @@ export default function App() {
   };
 
   // Add Individual Cell to Terminal (Admin Only)
-  const handleAddCell = async (cellId: string, rowLetter: string, position?: number): Promise<boolean> => {
+  const handleAddCell = async (
+    cellId: string,
+    rowLetter: string,
+    location: TerminalLocation = 'эстакада',
+    position?: number,
+    capacity: number = DEFAULT_PALLET_CAPACITY
+  ): Promise<boolean> => {
     if (!handleRequireAdmin(`Добавить ячейку ${cellId}`)) return false;
     const cleanId = cellId.trim().toUpperCase();
     const cleanRow = rowLetter.trim().toUpperCase();
     const pos = position || parseInt(cleanId.replace(/^[A-ZА-Я]+/i, ''), 10) || 1;
+    const finalCapacity = Math.max(1, capacity || DEFAULT_PALLET_CAPACITY);
 
-    const success = await addTerminalCellFirestore(cleanId, cleanRow, pos);
+    const success = await addTerminalCellFirestore(cleanId, cleanRow, location, pos, finalCapacity);
     if (!isLive || !success) {
       setCells((prev) => {
         if (prev.some((c) => c.cellId === cleanId)) return prev;
@@ -475,6 +495,8 @@ export default function App() {
           cellId: cleanId,
           row: cleanRow,
           position: pos,
+          location: location,
+          palletCapacity: finalCapacity,
           status: 'empty',
           updatedAt: new Date().toISOString()
         };
@@ -489,7 +511,7 @@ export default function App() {
           cellsInvolved: [cleanId],
           operatorName: 'Администратор',
           timestamp: new Date().toISOString(),
-          details: `Добавлена новая свободная ячейка ${cleanId} в Ряд ${cleanRow}`
+          details: `Добавлена новая свободная ячейка ${cleanId} в Ряд ${cleanRow} (вместимость: ${finalCapacity} палл.)`
         },
         ...prev
       ]);
@@ -517,6 +539,35 @@ export default function App() {
         },
         ...prev
       ]);
+    }
+    return true;
+  };
+
+  // Update Individual Cell Capacity (Admin Only)
+  const handleUpdateCellCapacity = async (cellId: string, newCapacity: number): Promise<boolean> => {
+    if (!handleRequireAdmin(`Изменить вместимость ячейки ${cellId}`)) return false;
+    const cleanId = cellId.trim().toUpperCase();
+    const finalCapacity = Math.max(1, Math.round(newCapacity));
+    const success = await updateCellCapacityFirestore(cleanId, finalCapacity, adminEmail || 'Администратор');
+    if (!isLive || !success) {
+      setCells((prev) =>
+        prev.map((c) => (c.cellId === cleanId ? { ...c, palletCapacity: finalCapacity, updatedAt: new Date().toISOString() } : c))
+      );
+    }
+    return true;
+  };
+
+  // Update Row Capacity (Admin Only)
+  const handleUpdateRowCapacity = async (rowLetter: string, newCapacity: number): Promise<boolean> => {
+    if (!handleRequireAdmin(`Изменить вместимость Ряда ${rowLetter}`)) return false;
+    const cleanRow = rowLetter.trim().toUpperCase();
+    const rowCellIds = cells.filter((c) => c.row === cleanRow).map((c) => c.cellId);
+    const finalCapacity = Math.max(1, Math.round(newCapacity));
+    const success = await updateRowCapacityFirestore(cleanRow, rowCellIds, finalCapacity, adminEmail || 'Администратор');
+    if (!isLive || !success) {
+      setCells((prev) =>
+        prev.map((c) => (c.row === cleanRow ? { ...c, palletCapacity: finalCapacity, updatedAt: new Date().toISOString() } : c))
+      );
     }
     return true;
   };
@@ -596,6 +647,7 @@ export default function App() {
           setIsAdminModalOpen(true);
         }}
         onLogoutAdmin={handleLogoutAdmin}
+        onOpenReports={() => setIsReportsModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -620,6 +672,7 @@ export default function App() {
               setPresetCellId(cellId);
               setActiveTab('unload');
             }}
+            onOpenReports={() => setIsReportsModalOpen(true)}
           />
         )}
 
@@ -646,6 +699,7 @@ export default function App() {
               setAdminModalActionTitle(title || 'Разблокировка ячейки');
               setIsAdminModalOpen(true);
             }}
+            onOpenReports={() => setIsReportsModalOpen(true)}
           />
         )}
 
@@ -662,6 +716,8 @@ export default function App() {
             onDeleteRow={handleDeleteRow}
             onAddCell={handleAddCell}
             onDeleteCell={handleDeleteCell}
+            onUpdateCellCapacity={handleUpdateCellCapacity}
+            onUpdateRowCapacity={handleUpdateRowCapacity}
             onBlockCell={handleBlockCell}
             onUnblockCell={handleUnblockCell}
             onResetDatabase={handleResetDatabase}
@@ -669,6 +725,7 @@ export default function App() {
             adminEmail={adminEmail}
             onAdminLoginSuccess={handleAdminLoginSuccess}
             onLogoutAdmin={handleLogoutAdmin}
+            onOpenReports={() => setIsReportsModalOpen(true)}
           />
         )}
       </main>
@@ -686,6 +743,15 @@ export default function App() {
         onClose={() => setIsAdminModalOpen(false)}
         onSuccess={handleAdminLoginSuccess}
         actionTitle={adminModalActionTitle}
+      />
+
+      {/* Warehouse Reports & Export Modal (Excel / PDF) */}
+      <ReportsModal
+        isOpen={isReportsModalOpen}
+        onClose={() => setIsReportsModalOpen(false)}
+        cells={cells}
+        catalog={catalog}
+        logs={logs}
       />
     </div>
   );

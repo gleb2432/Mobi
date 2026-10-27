@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, RefreshCw, Layers, ShieldCheck, Lock, LogOut } from 'lucide-react';
+import { Database, RefreshCw, Layers, ShieldCheck, Lock, LogOut, FileSpreadsheet } from 'lucide-react';
 import { TerminalCell } from '../types/terminal';
 
 interface NavbarProps {
@@ -11,6 +11,7 @@ interface NavbarProps {
   adminEmail?: string | null;
   onOpenAdminAuth: () => void;
   onLogoutAdmin: () => void;
+  onOpenReports?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -21,7 +22,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   isAdmin,
   adminEmail,
   onOpenAdminAuth,
-  onLogoutAdmin
+  onLogoutAdmin,
+  onOpenReports
 }) => {
   const occupiedCount = cells.filter(c => c.status === 'occupied').length;
   const totalCount = cells.length || 84;
@@ -75,6 +77,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Lock className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">Вход админа</span>
               <span className="sm:hidden">Админ</span>
+            </button>
+          )}
+
+          {/* Reports Button */}
+          {onOpenReports && (
+            <button
+              onClick={onOpenReports}
+              title="Складские отчеты и ведомости (Excel / PDF)"
+              className="flex items-center gap-1.5 bg-emerald-950/70 hover:bg-emerald-900/80 active:scale-95 text-emerald-300 hover:text-white px-2.5 py-1.5 rounded-xl border border-emerald-800/80 text-xs font-semibold transition-all shadow-sm"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Отчеты (Excel/PDF)</span>
+              <span className="sm:hidden">Отчеты</span>
             </button>
           )}
 

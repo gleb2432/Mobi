@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CatalogBottle, TerminalCell, TERMINAL_ROWS, GlassColor, UnloadingBatch, DEFAULT_PALLET_CAPACITY, CellBatchDetail, getGlassColorLabel } from '../types/terminal';
-import { Truck, Plus, Calendar, AlertCircle, CheckCircle2, ShieldCheck, Check, MousePointerClick, Trash2, Layers, Hash, Sparkles, Package } from 'lucide-react';
+import { CatalogBottle, TerminalCell, TERMINAL_ROWS, GlassColor, UnloadingBatch, DEFAULT_PALLET_CAPACITY, CellBatchDetail, getGlassColorLabel, TerminalLocation, LOCATION_LABELS } from '../types/terminal';
+import { Truck, Plus, Calendar, AlertCircle, CheckCircle2, ShieldCheck, Check, MousePointerClick, Trash2, Layers, Hash, Sparkles, Package, MapPin } from 'lucide-react';
 
 interface BatchItem {
   id: number;
@@ -64,6 +64,7 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
   const [selectedBottleId, setSelectedBottleId] = useState<string>(catalog[0]?.id || '');
   const [truckPlate, setTruckPlate] = useState<string>('');
   const [supplier, setSupplier] = useState<string>(catalog[0]?.supplier || '');
+  const [selectedLocation, setSelectedLocation] = useState<TerminalLocation>('эстакада');
   const [selectedRow, setSelectedRow] = useState<string>(presetRow);
 
   // Currently selected catalog bottle
@@ -72,11 +73,11 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
     [catalog, selectedBottleId]
   );
 
-  // Dynamic rows derived from cells
+  // Dynamic rows derived from cells and selected location
   const terminalRowsList = useMemo(() => {
-    const set = new Set(cells.map((c) => c.row));
+    const set = new Set(cells.filter(c => c.location === selectedLocation).map((c) => c.row));
     return Array.from(set).sort();
-  }, [cells]);
+  }, [cells, selectedLocation]);
 
   // Ensure selectedRow is valid if rows change
   useEffect(() => {
@@ -121,13 +122,16 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
   // Handle Preset Cell from Terminal Map
   useEffect(() => {
     if (presetCellId) {
-      const row = presetCellId.charAt(0);
-      setSelectedRow(row);
-      const next = new Map<string, number[]>();
-      next.set(presetCellId, batches.map((b) => b.id));
-      setManualCellMap(next);
+      const targetCell = cells.find(c => c.cellId === presetCellId);
+      if (targetCell) {
+        setSelectedLocation(targetCell.location || 'эстакада');
+        setSelectedRow(targetCell.row);
+        const next = new Map<string, number[]>();
+        next.set(presetCellId, batches.map((b) => b.id));
+        setManualCellMap(next);
+      }
     }
-  }, [presetCellId]);
+  }, [presetCellId, cells]);
 
   // Sync supplier when bottle changes
   const handleBottleChange = (bottleId: string) => {
@@ -248,39 +252,35 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
     });
   };
 
-  // Check if current row has the same bottle name but different supplier OR different color
-  const rowHasMixingConflict = useMemo(() => {
-    if (!selectedBottle) return false;
+  // Rule: In one row it is ALLOWED to store different suppliers across different cells.
+  // In one CELL, mixing different suppliers, different bottle types or different colors is strictly FORBIDDEN.
+  const cellMixingConflict = useMemo(() => {
+    if (!selectedBottle || manualCellMap.size === 0) return null;
     const currentSupplier = supplier || selectedBottle.supplier;
     const currentColor = selectedBottle.color;
-    
-    return cells.some(c => 
-      c.row === selectedRow && 
-      c.status === 'occupied' && 
-      c.bottleName === selectedBottle.name && 
-      (c.supplier !== currentSupplier || c.bottleColor !== currentColor)
-    );
-  }, [cells, selectedRow, selectedBottle, supplier]);
 
-  const mixingConflictDetails = useMemo(() => {
-    if (!rowHasMixingConflict) return null;
-    const currentSupplier = supplier || selectedBottle?.supplier;
-    const currentColor = selectedBottle?.color;
-    
-    const conflictCell = cells.find(c => 
-      c.row === selectedRow && 
-      c.status === 'occupied' && 
-      c.bottleName === selectedBottle?.name && 
-      (c.supplier !== currentSupplier || c.bottleColor !== currentColor)
-    );
-    
-    if (!conflictCell) return null;
-    
-    return {
-      supplier: conflictCell.supplier || 'Не указан',
-      color: conflictCell.bottleColor || 'clear'
-    };
-  }, [cells, selectedRow, selectedBottle, supplier, rowHasMixingConflict]);
+    for (const cellId of manualCellMap.keys()) {
+      const targetCell = cells.find((c) => c.cellId === cellId);
+      if (targetCell && targetCell.status === 'occupied') {
+        const isDifferentSupplier = targetCell.supplier && targetCell.supplier !== currentSupplier;
+        const isDifferentBottle = targetCell.bottleName && targetCell.bottleName !== selectedBottle.name;
+        const isDifferentColor = targetCell.bottleColor && targetCell.bottleColor !== currentColor;
+
+        if (isDifferentSupplier || isDifferentBottle || isDifferentColor) {
+          return {
+            cellId,
+            existingSupplier: targetCell.supplier || 'Не указан',
+            existingBottle: targetCell.bottleName || '',
+            existingColor: targetCell.bottleColor || 'clear',
+            currentSupplier,
+            currentBottle: selectedBottle.name,
+            currentColor
+          };
+        }
+      }
+    }
+    return null;
+  }, [cells, manualCellMap, selectedBottle, supplier]);
 
   // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
@@ -299,6 +299,13 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
       return;
     }
 
+    if (cellMixingConflict) {
+      setErrorMessage(
+        `В одной ячейке (${cellMixingConflict.cellId}) запрещено смешивать разных поставщиков! Текущий поставщик ячейки: «${cellMixingConflict.existingSupplier}», ваш: «${cellMixingConflict.currentSupplier}».`
+      );
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -310,6 +317,8 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
       }> = [];
 
       manualCellMap.forEach((assignedBatchIds, cellId) => {
+        const targetCellObj = cells.find((c) => c.cellId === cellId);
+        const cellMaxCapacity = targetCellObj?.palletCapacity || DEFAULT_PALLET_CAPACITY;
         const details: CellBatchDetail[] = [];
         let cellTotalPallets = 0;
 
@@ -326,7 +335,7 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
               ? batchObj.palletCount
               : batchObj.palletCount;
           } else {
-            pallets = DEFAULT_PALLET_CAPACITY;
+            pallets = cellMaxCapacity;
           }
 
           cellTotalPallets += pallets;
@@ -364,6 +373,7 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
         bottleColor: selectedBottle.color,
         bottlesPerPallet: selectedBottle.bottlesPerPallet || 2400,
         mfgDates,
+        location: selectedLocation,
         row: selectedRow,
         occupiedCellIds: Array.from(manualCellMap.keys()),
         quantityPallets: totalTruckPallets,
@@ -511,8 +521,32 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
           )}
         </div>
 
-        {/* Step 2: Truck Plate & Supplier */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Step 2: Location, Truck Plate & Supplier */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+              Локация выгрузки
+            </label>
+            <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2 py-1">
+              <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+              <select
+                value={selectedLocation}
+                onChange={(e) => {
+                  setSelectedLocation(e.target.value as TerminalLocation);
+                  setManualCellMap(new Map());
+                  setCustomPalletSplit(new Map());
+                }}
+                className="w-full bg-transparent border-none text-sm font-bold text-white focus:outline-none focus:ring-0"
+              >
+                {(Object.keys(LOCATION_LABELS) as TerminalLocation[]).map((loc) => (
+                  <option key={loc} value={loc}>
+                    {LOCATION_LABELS[loc]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
               Номер ТС / Машины
@@ -521,7 +555,7 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
               type="text"
               value={truckPlate}
               onChange={(e) => setTruckPlate(e.target.value)}
-              placeholder="например: А777УК 777"
+              placeholder="А777УК 777"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white font-mono placeholder-slate-600 focus:outline-none focus:border-emerald-500"
             />
           </div>
@@ -704,30 +738,46 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
             })}
           </div>
 
-          {/* Supplier/Color Conflict Warning */}
-          {rowHasMixingConflict && (
-            <div className="bg-amber-950/40 border border-amber-500/50 p-3 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-2 duration-300">
-              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+          {/* Cell-Level Mixing Prohibition Warning (Forbidden in single cell, allowed in same row) */}
+          {cellMixingConflict && (
+            <div className="bg-rose-950/50 border border-rose-500/60 p-3 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-2 duration-300">
+              <div className="w-10 h-10 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-bold text-amber-200">
-                  Внимание: Смешивание в одном ряду!
+                <p className="text-xs font-bold text-rose-200">
+                  Запрещено: смешивание разных поставщиков в одной ячейке ({cellMixingConflict.cellId})!
                 </p>
-                <div className="text-[11px] text-amber-300/90 leading-relaxed">
-                  В ряду <strong className="text-white">{selectedRow}</strong> уже находится бутылка <strong className="text-white">«{selectedBottle?.name}»</strong> со следующими параметрами:
+                <div className="text-[11px] text-rose-300/90 leading-relaxed">
+                  В ячейке <strong className="text-white">{cellMixingConflict.cellId}</strong> уже находится тара со следующими параметрами:
                   <ul className="list-disc list-inside mt-1 space-y-0.5 ml-1">
-                    <li>Поставщик: <strong className="text-white">«{mixingConflictDetails?.supplier}»</strong></li>
-                    <li>Цвет: <strong className="text-white">«{getGlassColorLabel(mixingConflictDetails?.color)}»</strong></li>
+                    <li>Сорт: <strong className="text-white">«{cellMixingConflict.existingBottle}»</strong></li>
+                    <li>Поставщик: <strong className="text-white">«{cellMixingConflict.existingSupplier}»</strong></li>
+                    <li>Цвет: <strong className="text-white">«{getGlassColorLabel(cellMixingConflict.existingColor)}»</strong></li>
                   </ul>
-                  <div className="mt-1.5 pt-1.5 border-t border-amber-500/20">
-                    Ваши параметры: Поставщик <strong className="text-emerald-400">«{supplier || selectedBottle?.supplier}»</strong>, Цвет <strong className="text-emerald-400">«{getGlassColorLabel(selectedBottle?.color)}»</strong>.
+                  <div className="mt-1.5 pt-1.5 border-t border-rose-500/20 text-rose-200">
+                    Параметры текущей выгрузки: Поставщик <strong className="text-white">«{cellMixingConflict.currentSupplier}»</strong>, Цвет <strong className="text-white">«{getGlassColorLabel(cellMixingConflict.currentColor)}»</strong>.
                   </div>
-                  Рекомендуется выбрать другой ряд для разгрузки.
+                  <p className="mt-1 text-slate-300">
+                    💡 В одном ряду допускаются разные поставщики, но внутри одной ячейки смешивание запрещено. Выберите свободную пустую ячейку.
+                  </p>
                 </div>
               </div>
             </div>
           )}
+
+          {/* Warehouse Placement Rule Note */}
+          <div className="bg-slate-950 border border-slate-800/80 px-3 py-2 rounded-xl flex items-center justify-between text-[11px] text-slate-400">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>
+                Правило терминала: в одном ряду допускаются <strong className="text-slate-200">разные поставщики</strong>, в одной ячейке смешивание <strong className="text-amber-400">запрещено</strong>.
+              </span>
+            </span>
+            <span className="text-[10px] font-mono text-emerald-400/90 hidden sm:inline">
+              1 ячейка = 1 поставщик
+            </span>
+          </div>
 
           {/* Interactive Cell Grid */}
           <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2">
@@ -737,7 +787,7 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
                 Нажимайте на свободные ячейки Ряда {selectedRow} для выгрузки:
               </span>
               <span className="text-emerald-400 font-mono font-bold">
-                Вместимость ячейки: 26 паллет
+                Вместимость ячеек ряда: {rowCells[0]?.palletCapacity || DEFAULT_PALLET_CAPACITY} паллет
               </span>
             </div>
 
@@ -751,6 +801,7 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
                 const isOccupied = cell.status === 'occupied';
                 const assignedBatches = manualCellMap.get(cell.cellId) || [];
                 const isAssigned = assignedBatches.length > 0;
+                const cellCap = cell.palletCapacity || DEFAULT_PALLET_CAPACITY;
 
                 let cellStyle = 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600';
                 if (isOccupied) {
@@ -783,7 +834,9 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
                           : `П#${assignedBatches[0]}`}
                       </span>
                     ) : (
-                      <span className="text-[8px] text-slate-600 font-mono">свободно</span>
+                      <span className="text-[8px] text-emerald-400/80 font-mono font-medium">
+                        до {cellCap}п
+                      </span>
                     )}
                   </button>
                 );
@@ -806,6 +859,9 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
 
               <div className="space-y-3">
                 {Array.from(manualCellMap.entries()).map(([cellId, assignedIds]) => {
+                  const targetCell = cells.find((c) => c.cellId === cellId);
+                  const cellCap = targetCell?.palletCapacity || DEFAULT_PALLET_CAPACITY;
+
                   // Calculate cell total pallets
                   let cellSum = 0;
                   assignedIds.forEach((bId) => {
@@ -819,6 +875,8 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
                       cellSum += batchObj.palletCount;
                     }
                   });
+
+                  const isOverCapacity = cellSum > cellCap;
 
                   return (
                     <div
@@ -835,8 +893,15 @@ export const TruckUnloading: React.FC<TruckUnloadingProps> = ({
                           </span>
                         </div>
 
-                        <div className="text-xs font-mono font-bold text-emerald-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
-                          Итого в ячейке: {cellSum} паллет
+                        <div
+                          className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border ${
+                            isOverCapacity
+                              ? 'bg-amber-950/80 border-amber-600 text-amber-300'
+                              : 'bg-slate-950 border-slate-800 text-emerald-400'
+                          }`}
+                        >
+                          Итого: {cellSum} / {cellCap} паллет
+                          {isOverCapacity && ' ⚠️'}
                         </div>
                       </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { CatalogBottle, TerminalCell, TERMINAL_ROWS, GlassColor, DEFAULT_PALLET_CAPACITY } from '../types/terminal';
+import { CatalogBottle, TerminalCell, TERMINAL_ROWS, GlassColor, DEFAULT_PALLET_CAPACITY, TerminalLocation, LOCATION_LABELS } from '../types/terminal';
 import { PartialCellPickup } from '../lib/firebase';
-import { Search, Info, PackageCheck, X, Truck, Calendar, Building2, Filter, Layers, Plus, Trash2, Lock, ShieldAlert, Package } from 'lucide-react';
+import { Search, Info, PackageCheck, X, Truck, Calendar, Building2, Filter, Layers, Plus, Trash2, Lock, ShieldAlert, Package, MapPin, FileSpreadsheet } from 'lucide-react';
 
 interface TerminalMapProps {
   catalog: CatalogBottle[];
@@ -11,10 +11,11 @@ interface TerminalMapProps {
   onBlockCell?: (cellId: string, reason: string) => Promise<boolean>;
   onUnblockCell?: (cellId: string) => Promise<boolean>;
   onNavigateToUnloadRow?: (row: string, cellId?: string) => void;
-  onAddCell?: (cellId: string, rowLetter: string, position?: number) => Promise<boolean>;
+  onAddCell?: (cellId: string, rowLetter: string, location: TerminalLocation, position?: number) => Promise<boolean>;
   onDeleteCell?: (cellId: string) => Promise<boolean>;
   isAdmin?: boolean;
   onRequestAdminAuth?: (actionTitle?: string) => void;
+  onOpenReports?: () => void;
 }
 
 export const TerminalMap: React.FC<TerminalMapProps> = ({
@@ -28,9 +29,11 @@ export const TerminalMap: React.FC<TerminalMapProps> = ({
   onAddCell,
   onDeleteCell,
   isAdmin = false,
-  onRequestAdminAuth
+  onRequestAdminAuth,
+  onOpenReports
 }) => {
   const [selectedCell, setSelectedCell] = useState<TerminalCell | null>(null);
+  const [activeLocation, setActiveLocation] = useState<TerminalLocation>('эстакада');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCatalogBottleId, setSelectedCatalogBottleId] = useState<string>('all');
   const [colorFilter, setColorFilter] = useState<GlassColor | 'all'>('all');
@@ -47,11 +50,11 @@ export const TerminalMap: React.FC<TerminalMapProps> = ({
   const [customBlockReason, setCustomBlockReason] = useState<string>('');
   const [isBlockSubmitting, setIsBlockSubmitting] = useState<boolean>(false);
 
-  // Dynamically derive existing rows from terminal cells
+  // Dynamically derive existing rows from terminal cells for current location
   const terminalRowsList = useMemo(() => {
-    const set = new Set(cells.map((c) => c.row));
+    const set = new Set(cells.filter(c => c.location === activeLocation).map((c) => c.row));
     return Array.from(set).sort();
-  }, [cells]);
+  }, [cells, activeLocation]);
 
   // Helper for color badges & borders
   const getColorStyle = (color?: GlassColor) => {
@@ -122,7 +125,7 @@ export const TerminalMap: React.FC<TerminalMapProps> = ({
     const maxPos = rowCells.reduce((max, c) => Math.max(max, c.position), 0);
     const nextPos = maxPos + 1;
     const nextCellId = `${rowLetter}${nextPos}`;
-    await onAddCell(nextCellId, rowLetter, nextPos);
+    await onAddCell(nextCellId, rowLetter, activeLocation, nextPos);
     setIsAddingCell(false);
   };
 
@@ -174,9 +177,9 @@ export const TerminalMap: React.FC<TerminalMapProps> = ({
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span>Схема Терминала ({terminalRowsList.length} Рядов)</span>
+              <span>Схема Терминала</span>
               <span className="text-xs bg-slate-800 text-slate-300 font-mono px-2 py-0.5 rounded-full border border-slate-700">
-                {totalOccupied}/{cells.length}
+                {cells.filter(c => c.status === 'occupied').length}/{cells.length}
               </span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -184,43 +187,82 @@ export const TerminalMap: React.FC<TerminalMapProps> = ({
             </p>
           </div>
 
-          {/* Color Filter Tabs */}
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto max-w-full">
-            <button
-              onClick={() => setColorFilter('all')}
-              className={`px-2.5 py-1 rounded-lg transition-all font-medium whitespace-nowrap ${
-                colorFilter === 'all' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Все цвета
-            </button>
-            <button
-              onClick={() => setColorFilter('brown')}
-              className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-medium whitespace-nowrap ${
-                colorFilter === 'brown' ? 'bg-amber-900/60 text-amber-300 border border-amber-700/50' : 'text-slate-400 hover:text-amber-300'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-amber-600" />
-              Коричневая
-            </button>
-            <button
-              onClick={() => setColorFilter('green')}
-              className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-medium whitespace-nowrap ${
-                colorFilter === 'green' ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-700/50' : 'text-slate-400 hover:text-emerald-300'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              Зелёная
-            </button>
-            <button
-              onClick={() => setColorFilter('clear')}
-              className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-medium whitespace-nowrap ${
-                colorFilter === 'clear' ? 'bg-sky-900/60 text-sky-300 border border-sky-700/50' : 'text-slate-400 hover:text-sky-300'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-sky-300" />
-              Бесцветная
-            </button>
+          {/* Location & Color Filter Tabs */}
+          <div className="flex flex-col gap-2 w-full sm:w-auto">
+            {/* Main Location Selection & Reports Trigger */}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
+                {(Object.keys(LOCATION_LABELS) as TerminalLocation[]).map(loc => (
+                  <button
+                    key={loc}
+                    onClick={() => setActiveLocation(loc)}
+                    className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 font-bold whitespace-nowrap ${
+                      activeLocation === loc 
+                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <MapPin className={`w-3 h-3 ${activeLocation === loc ? 'text-white' : 'text-slate-500'}`} />
+                    {LOCATION_LABELS[loc]}
+                    <span className="text-[10px] opacity-60 font-mono">
+                      ({cells.filter(c => c.location === loc).length})
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {onOpenReports && (
+                <button
+                  type="button"
+                  onClick={onOpenReports}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-950 hover:bg-emerald-950/80 text-emerald-300 hover:text-white border border-slate-800 hover:border-emerald-700/60 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm shrink-0"
+                  title="Сводная ведомость и отчет по остаткам (Excel / PDF)"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline">Отчет (Excel / PDF)</span>
+                  <span className="sm:hidden">Отчет</span>
+                </button>
+              )}
+            </div>
+
+            {/* Color Filter Tabs */}
+            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto max-w-full">
+              <button
+                onClick={() => setColorFilter('all')}
+                className={`px-2.5 py-1 rounded-lg transition-all font-medium whitespace-nowrap ${
+                  colorFilter === 'all' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Все цвета
+              </button>
+              <button
+                onClick={() => setColorFilter('brown')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-medium whitespace-nowrap ${
+                  colorFilter === 'brown' ? 'bg-amber-900/60 text-amber-300 border border-amber-700/50' : 'text-slate-400 hover:text-amber-300'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-600" />
+                Коричневая
+              </button>
+              <button
+                onClick={() => setColorFilter('green')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-medium whitespace-nowrap ${
+                  colorFilter === 'green' ? 'bg-emerald-900/60 text-emerald-300 border border-emerald-700/50' : 'text-slate-400 hover:text-emerald-300'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                Зелёная
+              </button>
+              <button
+                onClick={() => setColorFilter('clear')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 font-medium whitespace-nowrap ${
+                  colorFilter === 'clear' ? 'bg-sky-900/60 text-sky-300 border border-sky-700/50' : 'text-slate-400 hover:text-sky-300'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-sky-300" />
+                Бесцветная
+              </button>
+            </div>
           </div>
         </div>
 
@@ -431,7 +473,7 @@ export const TerminalMap: React.FC<TerminalMapProps> = ({
                     Информация о ячейке {selectedCell.cellId}
                   </h3>
                   <p className="text-xs text-slate-400 font-mono">
-                    Ряд {selectedCell.row}, Позиция {selectedCell.position} из 7
+                    {LOCATION_LABELS[selectedCell.location || 'эстакада']}, Ряд {selectedCell.row}, Позиция {selectedCell.position} из 7
                   </p>
                 </div>
               </div>
@@ -495,7 +537,7 @@ export const TerminalMap: React.FC<TerminalMapProps> = ({
                       {selectedCell.truckPlate || 'Не указан'}
                     </span>
                     <p className="text-[10px] text-emerald-400 font-bold mt-0.5 font-mono">
-                      {selectedCell.palletCount || DEFAULT_PALLET_CAPACITY} палл. (~{totalBottlesInCell.toLocaleString('ru-RU')} бут.)
+                      {selectedCell.palletCount || 0} из {selectedCell.palletCapacity || DEFAULT_PALLET_CAPACITY} палл. (~{totalBottlesInCell.toLocaleString('ru-RU')} бут.)
                     </p>
                   </div>
 
@@ -526,7 +568,7 @@ export const TerminalMap: React.FC<TerminalMapProps> = ({
                       Состав партий в ячейке {selectedCell.cellId}:
                     </span>
                     <span className="font-mono text-white bg-slate-800 px-2 py-0.5 rounded text-[11px]">
-                      Всего: {selectedCell.palletCount || DEFAULT_PALLET_CAPACITY} паллет (~{totalBottlesInCell.toLocaleString('ru-RU')} бут.)
+                      Всего: {selectedCell.palletCount || 0} / {selectedCell.palletCapacity || DEFAULT_PALLET_CAPACITY} паллет (~{totalBottlesInCell.toLocaleString('ru-RU')} бут.)
                     </span>
                   </div>
 

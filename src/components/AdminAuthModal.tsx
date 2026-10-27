@@ -30,7 +30,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
       onClose();
       setPassword('');
     } else {
-      setError('Неверный пароль. Введите пароль администратора: admin2026.ru');
+      setError('Неверный пароль администратора. Доступ запрещен.');
     }
   };
 
@@ -85,7 +85,7 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
                   setPassword(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder="Введите пароль (admin2026.ru)"
+                placeholder="••••••••••••"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 pr-11 text-base text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono tracking-wide"
                 autoFocus
               />
@@ -123,12 +123,6 @@ export const AdminAuthModal: React.FC<AdminAuthModalProps> = ({
             </button>
           </div>
         </form>
-
-        <div className="mt-4 pt-3 border-t border-slate-800/80 text-center">
-          <p className="text-[11px] text-slate-500 font-mono">
-            Пароль по умолчанию: <span className="text-amber-400/90 font-semibold select-all">admin2026.ru</span>
-          </p>
-        </div>
       </div>
     </div>
   );
