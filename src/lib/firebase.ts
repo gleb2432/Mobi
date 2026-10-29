@@ -22,9 +22,9 @@ import {
 import { CatalogBottle, TerminalCell, WarehouseLog, UnloadingBatch, CellBatchDetail, CELLS_PER_ROW, GlassColor, TerminalLocation, LOCATION_LABELS, DEFAULT_PALLET_CAPACITY } from '../types/terminal';
 import { INITIAL_BOTTLES, generateInitialCells, INITIAL_LOGS } from '../data/initialData';
 
-// Set Firestore log level to error to avoid noisy transport warnings in iframe sandbox
+// Set Firestore log level to silent to prevent transport reconnect notices from bubbling as console errors
 try {
-  setLogLevel('error');
+  setLogLevel('silent');
 } catch (e) {
   console.debug('setLogLevel info:', e);
 }
@@ -32,13 +32,13 @@ try {
 // Initialize Firebase App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with experimentalForceLongPolling to ensure 100% reliable transport in iframe sandbox
+// Initialize Firestore with experimentalAutoDetectLongPolling for fastest channel with auto fallback
 function createFirestoreInstance(): Firestore {
   try {
     return initializeFirestore(
       app,
       {
-        experimentalForceLongPolling: true
+        experimentalAutoDetectLongPolling: true
       },
       firebaseConfig.firestoreDatabaseId
     );

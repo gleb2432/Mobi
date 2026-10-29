@@ -25,6 +25,7 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
   onOpenReports
 }) => {
   const [selectedBottleFilter, setSelectedBottleFilter] = useState<string>('all');
+  const [selectedColorFilter, setSelectedColorFilter] = useState<GlassColor | 'all'>('all');
   const [confirmGroup, setConfirmGroup] = useState<FifoGroup | null>(null);
 
   // Partial Pickup Modal Controls
@@ -128,11 +129,30 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
 
   occupiedCells.forEach((cell) => {
     const bottleName = cell.bottleName || 'Неизвестная бутылка';
+    const cellColor = cell.bottleColor || 'clear';
 
+    // 1. Dedicated Color Filter
+    if (selectedColorFilter !== 'all') {
+      const matchColor =
+        (selectedColorFilter === 'brown' && (cellColor === 'brown' || cellColor === 'amber')) ||
+        (selectedColorFilter === 'green' && (cellColor === 'green' || cellColor === 'emerald')) ||
+        (selectedColorFilter === 'clear' && cellColor === 'clear') ||
+        cellColor === selectedColorFilter;
+      if (!matchColor) return;
+    }
+
+    // 2. Specific Catalog Bottle Filter (checks both Name and Color)
     if (selectedBottleFilter !== 'all') {
       const selectedCatalogBottle = catalog.find((b) => b.id === selectedBottleFilter);
-      if (selectedCatalogBottle && cell.bottleName !== selectedCatalogBottle.name) {
-        return;
+      if (selectedCatalogBottle) {
+        const catColor = selectedCatalogBottle.color || 'clear';
+        const colorMatch =
+          cellColor === catColor ||
+          ((catColor === 'green' || catColor === 'emerald') && (cellColor === 'green' || cellColor === 'emerald')) ||
+          ((catColor === 'brown' || catColor === 'amber') && (cellColor === 'brown' || cellColor === 'amber'));
+        if (cell.bottleName !== selectedCatalogBottle.name || !colorMatch) {
+          return;
+        }
       }
     }
 
@@ -352,24 +372,81 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
           )}
         </div>
 
-        {/* Filter Dropdown */}
-        <div className="mt-3 pt-3 border-t border-emerald-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-          <label className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 shrink-0">
-            <ArrowDownAZ className="w-4 h-4 text-emerald-400" />
-            Фильтр по сорту бутылки:
-          </label>
-          <select
-            value={selectedBottleFilter}
-            onChange={(e) => setSelectedBottleFilter(e.target.value)}
-            className="w-full sm:w-auto bg-slate-950 border border-emerald-800/80 rounded-xl px-3 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-emerald-400"
-          >
-            <option value="all">Все сорта стеклотары ({occupiedCells.length} ячеек)</option>
-            {catalog.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name} • {getGlassColorLabel(b.color)} ({b.supplier})
-              </option>
-            ))}
-          </select>
+        {/* Filter Controls: Color & Bottle */}
+        <div className="mt-3 pt-3 border-t border-emerald-900/50 flex flex-col gap-2.5">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+            <label className="text-xs font-bold text-emerald-300 flex items-center gap-1.5 shrink-0">
+              <ArrowDownAZ className="w-4 h-4 text-emerald-400" />
+              Фильтр стеклотары для завоза:
+            </label>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              {/* Color filter tabs */}
+              <div className="flex items-center bg-slate-950 border border-emerald-800/80 rounded-xl p-1 gap-1 overflow-x-auto">
+                <button
+                  type="button"
+                  onClick={() => setSelectedColorFilter('all')}
+                  className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-colors whitespace-nowrap ${
+                    selectedColorFilter === 'all'
+                      ? 'bg-emerald-600 text-white font-bold shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Все цвета
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedColorFilter('green')}
+                  className={`px-2 py-1 text-xs rounded-lg font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                    selectedColorFilter === 'green'
+                      ? 'bg-emerald-950 border border-emerald-500 text-emerald-200 font-bold'
+                      : 'text-slate-400 hover:text-emerald-300'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shrink-0" />
+                  Зелёная
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedColorFilter('brown')}
+                  className={`px-2 py-1 text-xs rounded-lg font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                    selectedColorFilter === 'brown'
+                      ? 'bg-amber-950 border border-amber-600 text-amber-200 font-bold'
+                      : 'text-slate-400 hover:text-amber-300'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-amber-600 inline-block shrink-0" />
+                  Коричневая
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedColorFilter('clear')}
+                  className={`px-2 py-1 text-xs rounded-lg font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                    selectedColorFilter === 'clear'
+                      ? 'bg-slate-800 border border-sky-400 text-sky-200 font-bold'
+                      : 'text-slate-400 hover:text-sky-300'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-sky-300 inline-block shrink-0" />
+                  Бесцветная
+                </button>
+              </div>
+
+              {/* Bottle dropdown */}
+              <select
+                value={selectedBottleFilter}
+                onChange={(e) => setSelectedBottleFilter(e.target.value)}
+                className="w-full sm:w-auto bg-slate-950 border border-emerald-800/80 rounded-xl px-3 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-emerald-400"
+              >
+                <option value="all">Все сорта ({occupiedCells.length} ячеек)</option>
+                {catalog.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} • {getGlassColorLabel(b.color)} ({b.supplier})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -597,41 +674,52 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
 
         return (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md mx-auto rounded-2xl p-4 sm:p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2 text-emerald-400 font-bold text-base">
-                <PackageCheck className="w-5 h-5" />
-                Выборочный забор тары на склад
+              <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm sm:text-base">
+                <PackageCheck className="w-5 h-5 shrink-0" />
+                <span>Выборочный забор тары на склад</span>
               </div>
               <button
                 onClick={() => setConfirmGroup(null)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
-              {/* Bottle Info */}
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
-                <div>
-                  <div className="text-slate-400 text-[11px]">Сорт стеклотары:</div>
-                  <div className="font-bold text-white text-sm">{confirmGroup.bottleName}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                    <Package className="w-3 h-3 text-emerald-400" />
-                    {modalBPerPallet.toLocaleString('ru-RU')} бут./паллет
-                  </span>
-                  <div className="text-right">
-                    <div className="text-slate-400 text-[11px]">Место:</div>
-                    <div className="font-mono font-extrabold text-emerald-400 text-[11px] leading-tight">
-                      {LOCATION_LABELS[confirmGroup.cells[0].location || 'эстакада']}
-                      <br />
-                      Ряд {confirmGroup.cells[0].row}
+            <div className="space-y-3.5 text-xs">
+              {/* Bottle Info with Color Badge */}
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="text-slate-400 text-[11px]">Сорт стеклотары:</div>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      <span className={`w-3 h-3 rounded-full ${getColorDot(confirmGroup.color)} shrink-0`} />
+                      <span className="font-bold text-white text-sm sm:text-base">{confirmGroup.bottleName}</span>
+                      <span className="text-[11px] bg-slate-800 text-slate-200 px-2 py-0.5 rounded border border-slate-700 font-medium">
+                        Цвет: {getColorLabel(confirmGroup.color)}
+                      </span>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                      <Package className="w-3 h-3 text-emerald-400" />
+                      {modalBPerPallet.toLocaleString('ru-RU')} бут./палл.
+                    </span>
+                    <div className="text-right">
+                      <div className="text-slate-400 text-[10px]">Место:</div>
+                      <div className="font-mono font-bold text-emerald-400 text-xs">
+                        {LOCATION_LABELS[confirmGroup.cells[0].location || 'эстакада']}, Ряд {confirmGroup.cells[0].row}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-400 flex items-center gap-1.5 pt-1 border-t border-slate-900">
+                  <Building2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <span>Поставщик: <strong className="text-slate-300">{confirmGroup.supplier}</strong></span>
                 </div>
               </div>
 
@@ -727,7 +815,7 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
                 </div>
               )}
 
-              {/* Step 2: Select Batch in Cell */}
+              {/* Step 2: Select Batch in Cell (Anti-overflow wrapping) */}
               {selectedCell && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-200 uppercase tracking-wider block">
@@ -743,30 +831,32 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
                         <div
                           key={idx}
                           onClick={() => handleBatchSwitch(bLabel)}
-                          className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                          className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition-all ${
                             isSelected
                               ? 'bg-emerald-950/80 border-emerald-500 text-white font-bold ring-1 ring-emerald-500/30'
                               : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
                           }`}
                         >
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <input
                               type="radio"
                               name="batchChoice"
                               checked={isSelected}
                               onChange={() => handleBatchSwitch(bLabel)}
-                              className="w-4 h-4 text-emerald-500 focus:ring-emerald-500 bg-slate-950 border-slate-700"
+                              className="w-4 h-4 text-emerald-500 focus:ring-emerald-500 bg-slate-950 border-slate-700 shrink-0"
                             />
-                            <span className="font-mono text-xs text-white font-bold">
-                              {bLabel}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              (Дата: {batchDetail.mfgDate})
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                              <span className="font-mono text-xs text-white font-bold">
+                                {bLabel}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                                {batchDetail.mfgDate}
+                              </span>
+                            </div>
                           </div>
 
-                          <span className="font-mono text-xs text-emerald-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                            {batchDetail.palletCount} паллет в наличии
+                          <span className="font-mono text-[11px] text-emerald-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800 shrink-0 whitespace-nowrap">
+                            {batchDetail.palletCount} палл.
                           </span>
                         </div>
                       );
@@ -775,19 +865,32 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
                 </div>
               )}
 
-              {/* Step 3: Input Pallet Count to Take */}
-              <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-2xl space-y-3">
-                <div className="flex items-center justify-between">
+              {/* Step 3: Input Pallet Count to Take (Responsive Stepper & Preset Grid) */}
+              <div className="bg-slate-950 border border-slate-800 p-3 sm:p-3.5 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between gap-1">
                   <label className="text-xs font-bold text-slate-200 uppercase tracking-wider block">
-                    3. Сколько паллет забрать на склад:
+                    3. Паллет на склад:
                   </label>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    Макс: {maxPalletsAvailableInBatch} палл. (~{(maxPalletsAvailableInBatch * modalBPerPallet).toLocaleString('ru-RU')} бут.)
+                  <span className="text-[11px] text-emerald-400 font-mono">
+                    В наличии: <strong className="text-white">{maxPalletsAvailableInBatch} палл.</strong>
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-1">
+                {/* Input with Quick Steppers */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = typeof palletsToTake === 'number' ? palletsToTake : 1;
+                      setPalletsToTake(Math.max(1, cur - 1));
+                    }}
+                    disabled={Number(palletsToTake) <= 1}
+                    className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 active:scale-95 text-slate-200 font-bold text-lg flex items-center justify-center shrink-0 disabled:opacity-40 transition-colors"
+                  >
+                    -
+                  </button>
+
+                  <div className="relative flex-1 min-w-0">
                     <input
                       type="number"
                       min={1}
@@ -816,51 +919,64 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
                           setPalletsToTake(maxPalletsAvailableInBatch);
                         }
                       }}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-base font-mono font-bold text-emerald-400 focus:outline-none focus:border-emerald-500"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-center text-lg font-mono font-bold text-emerald-400 focus:outline-none focus:border-emerald-500"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium">
-                      паллет
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-medium pointer-events-none">
+                      палл.
                     </span>
                   </div>
 
-                  {/* Preset Quick Buttons */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setPalletsToTake(Math.min(1, maxPalletsAvailableInBatch))}
-                      className="px-2.5 py-2 bg-slate-900 border border-slate-800 text-slate-300 font-mono font-bold text-xs rounded-xl hover:border-slate-700 hover:text-white transition-colors"
-                    >
-                      1 палл.
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPalletsToTake(Math.min(6, maxPalletsAvailableInBatch))}
-                      className="px-2.5 py-2 bg-slate-900 border border-slate-800 text-slate-300 font-mono font-bold text-xs rounded-xl hover:border-slate-700 hover:text-white transition-colors"
-                    >
-                      6 палл.
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPalletsToTake(Math.min(12, maxPalletsAvailableInBatch))}
-                      className="px-2.5 py-2 bg-emerald-950 border border-emerald-700 text-emerald-300 font-mono font-bold text-xs rounded-xl hover:bg-emerald-900 transition-colors"
-                    >
-                      12 палл.
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPalletsToTake(maxPalletsAvailableInBatch)}
-                      className="px-2.5 py-2 bg-slate-800 border border-slate-700 text-white font-mono font-bold text-xs rounded-xl hover:bg-slate-700 transition-colors"
-                    >
-                      Всё ({maxPalletsAvailableInBatch})
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = typeof palletsToTake === 'number' ? palletsToTake : 0;
+                      setPalletsToTake(Math.min(maxPalletsAvailableInBatch, cur + 1));
+                    }}
+                    disabled={Number(palletsToTake) >= maxPalletsAvailableInBatch}
+                    className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 active:scale-95 text-slate-200 font-bold text-lg flex items-center justify-center shrink-0 disabled:opacity-40 transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+
+                {/* Preset Quick Buttons Grid */}
+                <div className="grid grid-cols-4 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPalletsToTake(Math.min(1, maxPalletsAvailableInBatch))}
+                    className="py-1.5 bg-slate-900 border border-slate-800 text-slate-300 font-mono font-bold text-xs rounded-lg hover:border-slate-700 hover:text-white transition-colors"
+                  >
+                    1 палл.
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPalletsToTake(Math.min(6, maxPalletsAvailableInBatch))}
+                    className="py-1.5 bg-slate-900 border border-slate-800 text-slate-300 font-mono font-bold text-xs rounded-lg hover:border-slate-700 hover:text-white transition-colors"
+                  >
+                    6 палл.
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPalletsToTake(Math.min(12, maxPalletsAvailableInBatch))}
+                    className="py-1.5 bg-emerald-950 border border-emerald-700 text-emerald-300 font-mono font-bold text-xs rounded-lg hover:bg-emerald-900 transition-colors"
+                  >
+                    12 палл.
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPalletsToTake(maxPalletsAvailableInBatch)}
+                    className="py-1.5 bg-slate-800 border border-slate-700 text-white font-mono font-bold text-xs rounded-lg hover:bg-slate-700 transition-colors truncate px-1"
+                  >
+                    Всё ({maxPalletsAvailableInBatch})
+                  </button>
                 </div>
 
                 {/* Remaining Stock Preview */}
-                <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-[11px] font-mono flex items-center justify-between text-slate-300">
+                <div className="bg-slate-900 p-2 rounded-xl border border-slate-800 text-[11px] font-mono flex items-center justify-between text-slate-300">
                   <span>Остаток в ячейке {selectedCellId}:</span>
                   {(() => {
-                    const remPallets = Math.max(0, (selectedCell?.palletCount || 26) - (typeof palletsToTake === 'number' ? palletsToTake : 0));
+                    const takeVal = typeof palletsToTake === 'number' ? palletsToTake : 0;
+                    const remPallets = Math.max(0, (selectedCell?.palletCount || 26) - takeVal);
                     const remBottles = remPallets * modalBPerPallet;
                     return (
                       <span className="font-bold text-emerald-400">
@@ -887,17 +1003,26 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
                   </p>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleConfirmPartialPickup}
-                  disabled={isSubmitting || !selectedCellId || Number(palletsToTake) < 1}
-                  className="w-full min-h-[48px] bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition-all"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {isSubmitting
-                    ? 'Обработка завоза...'
-                    : `Подтвердить забор (${palletsToTake || 1} палл., ~{((Number(palletsToTake) || 1) * modalBPerPallet).toLocaleString('ru-RU')} бут.)`}
-                </button>
+                (() => {
+                  const actualTake = typeof palletsToTake === 'number' && palletsToTake >= 1 ? palletsToTake : 1;
+                  const actualBottles = actualTake * modalBPerPallet;
+
+                  return (
+                    <button
+                      type="button"
+                      onClick={handleConfirmPartialPickup}
+                      disabled={isSubmitting || !selectedCellId || Number(palletsToTake) < 1}
+                      className="w-full min-h-[46px] bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] disabled:opacity-50 text-white font-bold text-xs sm:text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 transition-all px-3 py-2 text-center"
+                    >
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span className="truncate">
+                        {isSubmitting
+                          ? 'Обработка завоза...'
+                          : `Подтвердить забор (${actualTake} палл., ~${actualBottles.toLocaleString('ru-RU')} бут.)`}
+                      </span>
+                    </button>
+                  );
+                })()
               )}
 
               {(() => {
@@ -922,9 +1047,7 @@ export const FifoWarehouseIntake: React.FC<FifoWarehouseIntakeProps> = ({
                   >
                     {!hasUnblocked
                       ? 'Все ячейки группы заблокированы'
-                      : `Забрать все доступные ${unblockedPallets} паллет (~${unblockedBottles.toLocaleString('ru-RU')} бут.) (${unblockedCells
-                          .map((c) => c.cellId)
-                          .join(', ')})`}
+                      : `Забрать все доступные ${unblockedPallets} паллет (~${unblockedBottles.toLocaleString('ru-RU')} бут.)`}
                   </button>
                 );
               })()}

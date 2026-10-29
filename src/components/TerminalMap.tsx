@@ -138,7 +138,13 @@ export const TerminalMap: React.FC<TerminalMapProps> = ({
       if (cell.status === 'empty') return searchQuery === '' && selectedCatalogBottleId === 'all';
 
       if (selectedCatalogBottleId !== 'all' && selectedBottleObj) {
-        if (cell.bottleName !== selectedBottleObj.name) {
+        const cellColor = cell.bottleColor || 'clear';
+        const catalogColor = selectedBottleObj.color || 'clear';
+        const colorMatch =
+          cellColor === catalogColor ||
+          ((catalogColor === 'green' || catalogColor === 'emerald') && (cellColor === 'green' || cellColor === 'emerald')) ||
+          ((catalogColor === 'brown' || catalogColor === 'amber') && (cellColor === 'brown' || cellColor === 'amber'));
+        if (cell.bottleName !== selectedBottleObj.name || !colorMatch) {
           return false;
         }
       }
